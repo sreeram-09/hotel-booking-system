@@ -202,8 +202,8 @@ export default function BookingsPage() {
               >
                 <div className="grid md:grid-cols-[280px_1fr]">
                   <img
-                    src={booking.hotelId.image}
-                    alt={booking.hotelId.name}
+                   src={booking.hotelId?.image || "/hotels/default.jpg"}
+                   alt={booking.hotelId?.name || "Hotel"}
                     className="h-full min-h-[230px] w-full object-cover"
                   />
 
@@ -215,11 +215,11 @@ export default function BookingsPage() {
                         </p>
 
                         <h2 className="mt-1 text-2xl font-bold text-slate-900">
-                          {booking.hotelId.name}
+                          {booking.hotelId?.name || "Hotel"}
                         </h2>
 
                         <p className="mt-1 text-slate-600">
-                          {booking.hotelId.city}, {booking.hotelId.state}
+                          {booking.hotelId?.city || ""}, {booking.hotelId?.state || ""}
                         </p>
                       </div>
 
