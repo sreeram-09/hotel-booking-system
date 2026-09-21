@@ -9,113 +9,96 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
 
-    const search = searchParams.get("search")?.trim()
-    const city = searchParams.get("city")?.trim()
-    const state = searchParams.get("state")?.trim()
-    const minPrice = searchParams.get("minPrice")
-    const maxPrice = searchParams.get("maxPrice")
-    const minRating = searchParams.get("minRating")
-    const propertyType = searchParams.get("propertyType")
+    const search = searchParams.get("search") || ""
+    const city = searchParams.get("city") || ""
+    const state = searchParams.get("state") || ""
+    const minPrice = Number(searchParams.get("minPrice") || 0)
+    const maxPrice = Number(searchParams.get("maxPrice") || 0)
+    const minRating = Number(searchParams.get("minRating") || 0)
+    const propertyType = searchParams.get("propertyType") || ""
 
     const filter: any = {}
 
     if (search) {
       filter.$or = [
-        {
-          name: {
-            $regex: search,
-            $options: "i"
-          }
-        },
-        {
-          city: {
-            $regex: search,
-            $options: "i"
-          }
-        },
-        {
-          state: {
-            $regex: search,
-            $options: "i"
-          }
-        }
+        { name: { $regex: search, $options: "i" } },
+        { city: { $regex: search, $options: "i" } },
+        { state: { $regex: search, $options: "i" } },
+        { location: { $regex: search, $options: "i" } }
       ]
     }
 
     if (city) {
-      filter.city = {
-        $regex: city,
-        $options: "i"
-      }
+      filter.city = { $regex: city, $options: "i" }
     }
 
     if (state) {
-      filter.state = {
-        $regex: state,
-        $options: "i"
-      }
+      filter.state = { $regex: state, $options: "i" }
     }
 
-    if (minPrice || maxPrice) {
+    if (minPrice > 0 || maxPrice > 0) {
       filter.price = {}
 
-      if (minPrice) {
-        filter.price.$gte = Number(minPrice)
+      if (minPrice > 0) {
+        filter.price.$gte = minPrice
       }
 
-      if (maxPrice) {
-        filter.price.$lte = Number(maxPrice)
+      if (maxPrice > 0) {
+        filter.price.$lte = maxPrice
       }
     }
 
-    if (minRating) {
-      filter.rating = {
-        $gte: Number(minRating)
-      }
+    if (minRating > 0) {
+      filter.rating = { $gte: minRating }
     }
 
     if (propertyType) {
       filter.propertyType = propertyType
     }
 
-    const hotels = await Hotel.find(filter).sort({
-      rating: -1,
-      price: 1
-    })
+    const hotels = await Hotel.find(filter)
+      .sort({
+        rating: -1,
+        price: 1
+      })
+      .lean()
 
-    const hotelsWithRooms = await Promise.all(
-      hotels.map(async (hotel) => {
+    const result = await Promise.all(
+      hotels.map(async (hotel: any) => {
         const rooms = await Room.find({
           hotelId: hotel._id
-        }).sort({
-          price: 1
         })
+          .select("price status")
+          .lean()
 
         const availableRooms = rooms.filter(
-          (room) => room.status === "available"
+          (room: any) => room.status === "available"
         )
 
-        const lowestRoomPrice =
-          rooms.length > 0
-            ? Math.min(
-                ...rooms.map((room) => room.price)
-              )
-            : hotel.price
+        const prices = rooms
+          .map((room: any) => Number(room.price))
+          .filter((price: number) => !Number.isNaN(price))
 
         return {
-          ...hotel.toObject(),
+          ...hotel,
+          _id: hotel._id.toString(),
           totalRooms: rooms.length,
           availableRooms: availableRooms.length,
-          lowestRoomPrice
+          lowestRoomPrice:
+            prices.length > 0
+              ? Math.min(...prices)
+              : hotel.price
         }
       })
     )
 
     return NextResponse.json({
-      count: hotelsWithRooms.length,
-      hotels: hotelsWithRooms
+      count: result.length,
+      hotels: result
     })
-  } catch {
+  } catch (error) {
+    console.error("HOTELS API ERROR:", error)
+
     return NextResponse.json(
       {
         message: "Failed to fetch hotels"
